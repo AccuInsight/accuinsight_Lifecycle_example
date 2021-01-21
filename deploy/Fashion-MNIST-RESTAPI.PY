@@ -38,23 +38,23 @@ class ConferenceList(Resource):
         def opener(path, flags):
             return os.open(path, flags, dir_fd=dir_fd)
         
-        json_file = open('json_file_name', 'r', opener=opener)  # json_file_name 수정
+        json_file = open('json_file_name', 'r', opener=opener)  # edit json_file_name
         
         loaded_model_json = json_file.read()
         json_file.close()
         loaded_model = model_from_json(loaded_model_json)
         #load weights into new model
-        loaded_model.load_weights('runs/best-model/h5_file_name')  # h5_file_name 수정
+        loaded_model.load_weights('runs/best-model/h5_file_name')  # edit h5_file_name
         if upload_parser.parse_args():
             data = upload_parser.parse_args().pop('test_data')
             label = upload_parser.parse_args().pop('test_label')
             test_data = pd.read_csv(data)
             label = pd.read_csv(label)
             test_data = np.array(test_data).reshape(1,28,28)
-            target = np.array(label)[0].tolist()
+            target = np.array(label)[0].tolist().pop()
             #output = loaded_model.predict(test_data)
             output  = np.argmax(loaded_model.predict(test_data))
-            return 'target: ' + str(target) + "\npredicted value: " + str(output)
+            return 'target: ' + str(target) + " predicted value: " + str(output)
         else:
             raise FileNotFoundError
 # Custom alarm function
