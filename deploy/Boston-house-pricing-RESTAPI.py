@@ -11,10 +11,8 @@ from werkzeug.datastructures import FileStorage
 ###################################################################################################
 
 # Custom packages
-import numpy as np
 import pandas as pd
 from tensorflow.keras.models import model_from_json
-
 # Flask app
 app = Flask(__name__)
 api = Api(app, version='1.0', title='Sample API', doc='/__swagger__', description='A sample API')
@@ -27,7 +25,6 @@ upload_parser.add_argument('test_data', location='files',
 upload_parser.add_argument('test_label', location='files',
                            type=FileStorage, required=True)
 
-
 # Custom API class
 @ns_conf.route("/")
 class ConferenceList(Resource):
@@ -35,29 +32,29 @@ class ConferenceList(Resource):
     @ns_conf.expect(upload_parser)
     def post():
         # load model from json
+        # print(os.getcwd())
         dir_fd = os.open('runs/best-model/', os.O_RDONLY)
         
         def opener(path, flags):
             return os.open(path, flags, dir_fd=dir_fd)
         
-        json_file = open('json_file_name', 'r', opener=opener)  # edit json_file_name
+        json_file = open('json_file_name', 'r', opener=opener)  # json_file_name modify
         
         loaded_model_json = json_file.read()
         json_file.close()
         loaded_model = model_from_json(loaded_model_json)
-
+        
         #load weights into new model
-        loaded_model.load_weights('runs/best-model/h5_file_name')  # edit h5_file_name
-
+        loaded_model.load_weights('runs/best-model/h5_file_name')  # h5_file_name modify
         if upload_parser.parse_args():
             data = upload_parser.parse_args().pop('test_data')
             label = upload_parser.parse_args().pop('test_label')
             test_data = pd.read_csv(data)
             label = pd.read_csv(label)
-            test_data = np.array(test_data).reshape(1,28,28)
-            target = np.array(label)[0].tolist().pop()
-
-            output = np.argmax(loaded_model.predict(test_data))
+            
+            target = label.loc[0, 'MEDV'].tolist()
+            output  = loaded_model.predict(test_data).tolist()[0].pop()
+            
             return 'target: ' + str(target) + " predicted value: " + str(output)
         else:
             raise FileNotFoundError
