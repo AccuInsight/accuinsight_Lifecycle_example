@@ -1,63 +1,63 @@
-###################################################################################################
+####################################################################################################
 # Do not modify this code block #
 # Import monitoring packages
-import logging
 import traceback
 from Accuinsight.Monitoring.deploy.monitoring_deploy import AddDeployLog
+
 # Import flask packages
 from flask import Flask, make_response, request
-from flask_restplus import Api, Resource
-from werkzeug.datastructures import FileStorage
-###################################################################################################
+from flask_restplus import Api, Resource, reqparse
+from flask_cors import CORS
+####################################################################################################
 
 # Custom packages
-import pandas as pd
-from tensorflow.keras.models import model_from_json
+import joblib
+import numpy as np
+
 # Flask app
 app = Flask(__name__)
+CORS(app)
 api = Api(app, version='1.0', title='Sample API', doc='/__swagger__', description='A sample API')
 app.config.SWAGGER_UI_DOC_EXPANSION = 'list'
-ns_conf = api.namespace('conferences', description='Conference operations')
+ns = api.namespace('cancer', description='Breast Cancer classification model')
 
-upload_parser = ns_conf.parser()
-upload_parser.add_argument('test_data', location='files',
-                           type=FileStorage, required=True)
-upload_parser.add_argument('test_label', location='files',
-                           type=FileStorage, required=True)
+input_parser = ns.parser()
+input_parser.add_argument('input_data', type=str, help='input data', location='form')
+
+req_parser = reqparse.RequestParser()
+req_parser.add_argument('input_data', type=str, help='input_data')
+
 
 # Custom API class
-@ns_conf.route("/")
-class ConferenceList(Resource):
+@ns.route("/")
+class Cancer(Resource):
     @staticmethod
-    @ns_conf.expect(upload_parser)
+    @ns.expect(input_parser)
     def post():
-        # load model from json
-        # print(os.getcwd())
-        dir_fd = os.open('runs/best-model/', os.O_RDONLY)
-        
-        def opener(path, flags):
-            return os.open(path, flags, dir_fd=dir_fd)
-        
-        json_file = open('json_file_name', 'r', opener=opener)  # json_file_name modify
-        
-        loaded_model_json = json_file.read()
-        json_file.close()
-        loaded_model = model_from_json(loaded_model_json)
-        
-        #load weights into new model
-        loaded_model.load_weights('runs/best-model/h5_file_name')  # h5_file_name modify
-        if upload_parser.parse_args():
-            data = upload_parser.parse_args().pop('test_data')
-            label = upload_parser.parse_args().pop('test_label')
-            test_data = pd.read_csv(data)
-            label = pd.read_csv(label)
-            
-            target = label.loc[0, 'MEDV'].tolist()
-            output  = loaded_model.predict(test_data).tolist()[0].pop()
-            
-            return 'target: ' + str(target) + " predicted value: " + str(output)
-        else:
-            raise FileNotFoundError
+        # custom variables and function
+        json_arr = request.get_json()
+
+        if not json_arr:
+            input_data = input_parser.parse_args().pop('input_data')
+
+            try:
+                json_arr = eval(input_data)
+            except SyntaxError:
+                raise ValueError("Invalid input data: " + input_data)
+
+        # load model from file
+        loaded_model = joblib.load("./runs/best-model/joblib_file_name")  # edit joblib_file_name
+
+        # label dictionary
+        class_dic = {0: "Ber", 1: "Mal"}
+
+        # make predictions for test data
+        y_pred = loaded_model.predict(np.array(json_arr['input_data']))
+
+        result = ["input_data[" + str(i + 1) + "] = '" + str(json_arr['input_data'][i]) + "', result = " + str(class_dic[y_pred[i]])
+                  for i in range(len(y_pred))]
+
+        return "\n".join(result)
 
 
 # Custom alarm function
@@ -102,11 +102,11 @@ def custom_alarm():
     # Custom alarm sample
     # if log_info['latest_log']['end_time'].hour >= 16: message.append("api called after 16:00")
     # if log_info['latest_log']['duration'] >= 0.01: message.append("api call has long duration time")
-    # if log_info['latest_log']['status_code'] != 200: message.append("api call failed")
+    if log_info['latest_log']['status_code'] != 200: message.append("Breast cancer classification api call failed")
 
     # Set notifiers
-    # deploy_monitor.set_slack('https://hooks.slack.com/services/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')
-    # deploy_monitor.set_mail('hyunjoong@sk.com')
+    # deploy_monitor.set_slack('')
+    # deploy_monitor.set_mail('')
 
     ####################################################################################################
     # Do not modify this code block #
@@ -135,7 +135,7 @@ def after(response):
     try:
         messages = custom_alarm()
     except Exception:
-        logging.error("Error raised on custom_alarm function\n" + traceback.format_exc())
+        app.logger.error("Error raised on custom_alarm function\n" + traceback.format_exc())
         messages = None
 
     deploy_monitor.add_log(messages)
